@@ -29,9 +29,7 @@ function doGet(e) {
       return jsonpOutput_(params.callback, {ok: false, error: err.message});
     }
   }
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Atividade de Ciências – 9º Ano')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return jsonpOutput_(params.callback, {ok: false, error: 'Endpoint ativo. Use action=students para carregar alunos ou action=save para registrar respostas.'});
 }
 
 function doPost(e) {
