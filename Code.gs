@@ -16,8 +16,11 @@ function getStudents() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(STUDENT_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  const values = sh.getRange(2, 1, sh.getLastRow() - 1, Math.max(3, sh.getLastColumn())).getDisplayValues();
-  return values.filter(r => r[0]).map(r => ({turma: String(r[0]).trim(), nome: String(r[1]).trim(), ra: String(r[2] || '').trim()}));
+  const lastCol = sh.getLastColumn();
+  const headers = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h).trim().toLowerCase());
+  const col = name => headers.indexOf(name);
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getDisplayValues();
+  return values.filter(r => r[0] && (col('situação do aluno') < 0 || String(r[col('situação do aluno')]).trim().toLowerCase() === 'ativo')).map(r => ({turma:String(r[col('turma')] >= 0 ? r[col('turma')] : r[0]).trim(), nome:String(r[col('nome')] >= 0 ? r[col('nome')] : r[1]).trim(), ra:String(r[col('ra')] >= 0 ? r[col('ra')] : r[2] || '').trim(), chamada:String(r[col('nº de chamada')] >= 0 ? r[col('nº de chamada')] : '').trim(), email:String(r[col('email google')] >= 0 ? r[col('email google')] : r[col('e-mail institucional')] >= 0 ? r[col('e-mail institucional')] : '').trim()}));
 }
 
 function saveResponse(payload) {
@@ -25,11 +28,11 @@ function saveResponse(payload) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh = ss.getSheetByName(RESPONSE_SHEET);
   if (!sh) sh = ss.insertSheet(RESPONSE_SHEET);
-  const headers = ['Data/hora','Nome','Turma','RA','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8 – resposta dissertativa','Q9 – resposta dissertativa','Q10 – resposta dissertativa','Nota objetiva','Status da correção'];
+  const headers = ['Data/hora','Data da atividade','Nome','Turma','RA','E-mail institucional','Nº da chamada','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8 – resposta dissertativa','Q9 – resposta dissertativa','Q10 – resposta dissertativa','Nota objetiva','Status da correção'];
   if (sh.getLastRow() === 0) sh.getRange(1,1,1,headers.length).setValues([headers]);
   const a = payload.answers || {};
   const objectiveScore = Object.keys(ANSWER_KEY).reduce((sum,q) => sum + (String(a[q] || '').toUpperCase() === ANSWER_KEY[q] ? 1 : 0), 0);
-  sh.appendRow([new Date(), payload.nome, payload.turma, payload.ra || '', a.q1||'',a.q2||'',a.q3||'',a.q4||'',a.q5||'',a.q6||'',a.q7||'',a.q8||'',a.q9||'',a.q10||'',objectiveScore,'Dissertativas aguardando correção']);
+  sh.appendRow([new Date(), payload.data || '', payload.nome, payload.turma, payload.ra || '', payload.email || '', payload.chamada || '', a.q1||'',a.q2||'',a.q3||'',a.q4||'',a.q5||'',a.q6||'',a.q7||'',a.q8||'',a.q9||'',a.q10||'',objectiveScore,'Dissertativas aguardando correção']);
   applyFormatting_(sh);
   return {message: 'Atividade registrada com sucesso. A nota objetiva foi salva; as questões dissertativas serão corrigidas pelo professor.'};
 }
@@ -38,13 +41,12 @@ function setupActivity() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let students = ss.getSheetByName(STUDENT_SHEET);
   if (!students) students = ss.insertSheet(STUDENT_SHEET);
-  if (students.getLastRow() === 0) students.getRange('A1:C1').setValues([['Turma','Nome','RA']]);
-  if (students.getLastRow() === 1) { const seed = DEFAULT_STUDENTS_9A.concat(DEFAULT_STUDENTS_9B); students.getRange(2, 1, seed.length, 3).setValues(seed.map(s => [s.turma, s.nome, s.ra])); }
+  if (students.getLastRow() === 0) students.getRange('A1:G1').setValues([['Turma','Nome','RA','Nº de chamada','E-mail Google','Situação do Aluno','Observação']]);
   students.setFrozenRows(1);
-  students.getRange('A1:C1').setFontWeight('bold').setBackground('#14324a').setFontColor('#ffffff');
+  students.getRange('A1:G1').setFontWeight('bold').setBackground('#14324a').setFontColor('#ffffff');
   let responses = ss.getSheetByName(RESPONSE_SHEET);
   if (!responses) responses = ss.insertSheet(RESPONSE_SHEET);
-  const headers = ['Data/hora','Nome','Turma','RA','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8 – resposta dissertativa','Q9 – resposta dissertativa','Q10 – resposta dissertativa','Nota objetiva','Status da correção'];
+  const headers = ['Data/hora','Data da atividade','Nome','Turma','RA','E-mail institucional','Nº da chamada','Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8 – resposta dissertativa','Q9 – resposta dissertativa','Q10 – resposta dissertativa','Nota objetiva','Status da correção'];
   if (responses.getLastRow() === 0) responses.getRange(1,1,1,headers.length).setValues([headers]);
   responses.setFrozenRows(1); responses.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#14324a').setFontColor('#ffffff');
   applyFormatting_(responses);
@@ -55,7 +57,7 @@ function setupActivity() {
 function applyFormatting_(sh) {
   const firstDataRow = 2, lastRow = Math.max(sh.getLastRow(), firstDataRow);
   if (lastRow < firstDataRow) return;
-  const objectiveCols = [5,6,7,8,9,10,11];
+  const objectiveCols = [8,9,10,11,12,13,14];
   objectiveCols.forEach((col, i) => {
     const letter = String.fromCharCode(65 + col - 1);
     const key = ANSWER_KEY['q' + (i+1)];
@@ -65,7 +67,7 @@ function applyFormatting_(sh) {
     rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(`=AND(${letter}${firstDataRow}<>"",${letter}${firstDataRow}<>"${key}")`).setBackground('#f4aaaa').setFontColor('#8b1e1e').setRanges([range]).build());
     sh.setConditionalFormatRules(rules);
   });
-  sh.getRange(`L${firstDataRow}:N${lastRow}`).setBackground('#fff4cc');
+  sh.getRange(`P${firstDataRow}:R${lastRow}`).setBackground('#fff4cc');
 }
 
 function onOpen() {
