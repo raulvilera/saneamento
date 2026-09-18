@@ -67,15 +67,20 @@ function getStudents() {
       ra: value_(row, index.ra), chamada: value_(row, index.chamada),
       email: value_(row, index.email)
     }))
-    .filter(student => CLASS_SHEETS.indexOf(student.turma) >= 0 && student.nome);
+    .filter(student => CLASS_SHEETS.some(className => sameClass_(student.turma, className)) && student.nome);
 }
 
 /** Recebe o formulário e registra a resposta na aba correspondente à turma. */
 function saveResponse(payload) {
   if (!payload || !payload.nome || !payload.turma) throw new Error('Nome e turma são obrigatórios.');
   if (CLASS_SHEETS.indexOf(payload.turma) < 0) throw new Error('Turma não autorizada.');
-  const student = getStudents().find(s => s.turma === payload.turma && s.nome === payload.nome);
-  if (!student) throw new Error('Aluno não encontrado ou não está com situação Ativo.');
+  const normalizedPayloadRA = normalizeKey_(payload.ra);
+  const normalizedPayloadName = normalizeKey_(payload.nome);
+  const student = getStudents().find(s =>
+    (normalizedPayloadRA && normalizeKey_(s.ra) === normalizedPayloadRA) ||
+    (sameClass_(s.turma, payload.turma) && normalizeKey_(s.nome) === normalizedPayloadName)
+  );
+  if (!student) throw new Error('Aluno não encontrado ou não está com situação Ativo. Verifique se a aba Alunos possui a situação exatamente como Ativo.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -181,6 +186,8 @@ function headerIndex_(headers) {
 
 function value_(row, index) { return String(row[index] || '').trim(); }
 function normalize_(value) { return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function normalizeKey_(value) { return normalize_(value).replace(/[^a-z0-9]+/g, ''); }
+function sameClass_(a, b) { return normalizeKey_(a).replace('9ano','9') === normalizeKey_(b).replace('9ano','9'); }
 function columnLetter_(column) { let output = ''; while (column > 0) { const remainder = (column - 1) % 26; output = String.fromCharCode(65 + remainder) + output; column = Math.floor((column - 1) / 26); } return output; }
 
 function onOpen() {
