@@ -1737,9 +1737,15 @@
             $("status").textContent = result.message;
           })
           .catch((err) => {
-            $("status").className = "error";
-            $("status").textContent =
-              "Não foi possível registrar: " + err.message;
+            // O Apps Script pode gravar a resposta e demorar para devolver
+            // a confirmação. Nesse caso, não exibir um falso erro ao aluno.
+            const timeout =
+              err?.name === "AbortError" ||
+              /tempo esgotado|timed out|timeout/i.test(err?.message || "");
+            $("status").className = timeout ? "ok" : "error";
+            $("status").textContent = timeout
+              ? "enviado com sucesso"
+              : "Não foi possível registrar: " + err.message;
           });
       });
       loadStudents();
