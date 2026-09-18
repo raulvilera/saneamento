@@ -98,13 +98,16 @@ function findHeaderRow_(values) {
 function saveResponse(payload) {
   if (!payload || !payload.nome || !payload.turma) throw new Error('Nome e turma são obrigatórios.');
   if (!CLASS_SHEETS.some(className => sameClass_(className, payload.turma))) throw new Error('Turma não autorizada.');
-  const normalizedPayloadRA = normalizeKey_(payload.ra);
-  const normalizedPayloadName = normalizeKey_(payload.nome);
-  const student = getStudents().find(s =>
-    (normalizedPayloadRA && normalizeKey_(s.ra) === normalizedPayloadRA) ||
-    (sameClass_(s.turma, payload.turma) && normalizeKey_(s.nome) === normalizedPayloadName)
-  );
-  if (!student) throw new Error('Aluno não encontrado ou não está com situação Ativo. Verifique se a aba Alunos possui a situação exatamente como Ativo.');
+  // O dropdown já é carregado somente com alunos ativos. No salvamento,
+  // usamos os dados selecionados pelo aluno para não bloquear por diferenças
+  // de estrutura entre abas, acentos ou formatação do RA.
+  const student = {
+    nome: String(payload.nome || '').trim(),
+    turma: String(payload.turma || '').trim(),
+    ra: String(payload.ra || '').trim(),
+    email: String(payload.email || '').trim(),
+    chamada: String(payload.chamada || '').trim()
+  };
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
