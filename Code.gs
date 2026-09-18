@@ -21,15 +21,16 @@ function doGet(e) {
   if (params.action === 'students') {
     return jsonpOutput_(params.callback, getStudents());
   }
-  if (params.action === 'save') {
+  if (['save', 'submit', 'respostas', 'submitResponse'].indexOf(params.action) >= 0) {
     try {
-      const payload = JSON.parse(params.payload || '{}');
+      const rawPayload = params.payload || params.data || params.body || '{}';
+      const payload = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
       return jsonpOutput_(params.callback, saveResponse(payload));
     } catch (err) {
       return jsonpOutput_(params.callback, {ok: false, error: err.message});
     }
   }
-  return jsonpOutput_(params.callback, {ok: false, error: 'Endpoint ativo. Use action=students para carregar alunos ou action=save para registrar respostas.'});
+  return jsonpOutput_(params.callback, {ok: false, error: 'Ação desconhecida. Use action=students ou action=save.'});
 }
 
 function doPost(e) {
@@ -73,7 +74,7 @@ function getStudents() {
 /** Recebe o formulário e registra a resposta na aba correspondente à turma. */
 function saveResponse(payload) {
   if (!payload || !payload.nome || !payload.turma) throw new Error('Nome e turma são obrigatórios.');
-  if (CLASS_SHEETS.indexOf(payload.turma) < 0) throw new Error('Turma não autorizada.');
+  if (!CLASS_SHEETS.some(className => sameClass_(className, payload.turma))) throw new Error('Turma não autorizada.');
   const normalizedPayloadRA = normalizeKey_(payload.ra);
   const normalizedPayloadName = normalizeKey_(payload.nome);
   const student = getStudents().find(s =>
