@@ -53,22 +53,45 @@ function jsonpOutput_(callback, data) {
     .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
-/** Retorna somente alunos com situação Ativo da aba Alunos. */
+/** Retorna somente alunos ativos, aceitando cabeçalhos após linhas de metadados. */
 function getStudents() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sh = ss.getSheetByName(STUDENT_SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
-  const data = sh.getDataRange().getDisplayValues();
-  const headers = data[0].map(normalize_);
-  const index = headerIndex_(headers);
-  return data.slice(1)
-    .filter(row => normalize_(row[index.status]) === 'ativo')
-    .map(row => ({
-      turma: value_(row, index.turma), nome: value_(row, index.nome),
-      ra: value_(row, index.ra), chamada: value_(row, index.chamada),
-      email: value_(row, index.email)
-    }))
-    .filter(student => CLASS_SHEETS.some(className => sameClass_(student.turma, className)) && student.nome);
+  const sheetNames = [STUDENT_SHEET].concat(CLASS_SHEETS);
+  const students = [];
+  const seen = {};
+  sheetNames.forEach(sheetName => {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 1) return;
+    const values = sh.getDataRange().getDisplayValues();
+    const headerRow = findHeaderRow_(values);
+    if (headerRow < 0) return;
+    const headers = values[headerRow].map(normalize_);
+    const index = headerIndex_(headers);
+    values.slice(headerRow + 1).forEach(row => {
+      if (normalize_(value_(row, index.status)) !== 'ativo') return;
+      const student = {
+        turma: index.turma >= 0 ? value_(row, index.turma) : sheetName,
+        nome: value_(row, index.nome),
+        ra: value_(row, index.ra),
+        chamada: value_(row, index.chamada),
+        email: value_(row, index.email)
+      };
+      if (!student.nome || !CLASS_SHEETS.some(className => sameClass_(student.turma, className))) return;
+      const key = normalizeKey_(student.turma) + '|' + normalizeKey_(student.nome) + '|' + normalizeKey_(student.ra);
+      if (!seen[key]) { seen[key] = true; students.push(student); }
+    });
+  });
+  return students;
+}
+
+function findHeaderRow_(values) {
+  for (let r = 0; r < Math.min(values.length, 30); r++) {
+    const row = values[r].map(normalize_);
+    const hasName = row.indexOf('nome do aluno') >= 0 || row.indexOf('nome') >= 0;
+    const hasStatus = row.indexOf('situacao do aluno') >= 0 || row.indexOf('situacao') >= 0 || row.indexOf('status') >= 0;
+    if (hasName && hasStatus) return r;
+  }
+  return -1;
 }
 
 /** Recebe o formulário e registra a resposta na aba correspondente à turma. */
@@ -172,16 +195,22 @@ function gradeObjective_(answers) {
 }
 
 function headerIndex_(headers) {
-  const find = names => {
+  const findOptional = names => {
     const index = names.map(normalize_).map(name => headers.indexOf(name)).find(i => i >= 0);
-    if (index < 0) throw new Error('Coluna obrigatória não encontrada: ' + names.join(' / '));
+    return index === undefined ? -1 : index;
+  };
+  const required = (names, label) => {
+    const index = findOptional(names);
+    if (index < 0) throw new Error('Coluna obrigatória não encontrada: ' + label);
     return index;
   };
   return {
-    turma: find(['turma']), nome: find(['nome', 'nome do aluno']), ra: find(['ra']),
-    chamada: find(['nº de chamada', 'n° de chamada', 'numero da chamada']),
-    email: find(['email google', 'e-mail institucional', 'email institucional']),
-    status: find(['situação do aluno', 'situacao do aluno'])
+    turma: findOptional(['turma', 'classe', 'sala']),
+    nome: required(['nome do aluno', 'nome'], 'Nome do Aluno'),
+    ra: required(['ra', 'registro do aluno'], 'RA'),
+    chamada: required(['nº de chamada', 'n° de chamada', 'numero da chamada', 'chamada'], 'Nº de chamada'),
+    email: required(['email google', 'e-mail institucional', 'email institucional', 'e-mail', 'email'], 'Email Google'),
+    status: required(['situação do aluno', 'situacao do aluno', 'situação', 'situacao', 'status'], 'Situação do Aluno')
   };
 }
 
