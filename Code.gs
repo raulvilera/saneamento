@@ -16,10 +16,27 @@ const STUDENT_SHEET = 'Alunos';
 const CLASS_SHEETS = ['9º Ano A', '9º Ano B'];
 const ANSWER_KEY = { q1: 'B', q2: 'B', q3: 'A', q4: 'B', q5: 'B', q6: 'A', q7: 'A' };
 
-function doGet() {
+function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'students') {
+    return jsonOutput_(getStudents());
+  }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Atividade de Ciências – 9º Ano')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    return jsonOutput_(saveResponse(payload));
+  } catch (err) {
+    return jsonOutput_({ok: false, error: err.message});
+  }
+}
+
+function jsonOutput_(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /** Retorna somente alunos com situação Ativo da aba Alunos. */
