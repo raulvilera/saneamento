@@ -17,8 +17,17 @@ const CLASS_SHEETS = ['9º Ano A', '9º Ano B'];
 const ANSWER_KEY = { q1: 'B', q2: 'B', q3: 'A', q4: 'B', q5: 'B', q6: 'A', q7: 'A' };
 
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'students') {
-    return jsonOutput_(getStudents());
+  const params = (e && e.parameter) || {};
+  if (params.action === 'students') {
+    return jsonpOutput_(params.callback, getStudents());
+  }
+  if (params.action === 'save') {
+    try {
+      const payload = JSON.parse(params.payload || '{}');
+      return jsonpOutput_(params.callback, saveResponse(payload));
+    } catch (err) {
+      return jsonpOutput_(params.callback, {ok: false, error: err.message});
+    }
   }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Atividade de Ciências – 9º Ano')
@@ -37,6 +46,12 @@ function doPost(e) {
 function jsonOutput_(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function jsonpOutput_(callback, data) {
+  const safeCallback = String(callback || 'handleAppsScriptResponse').replace(/[^a-zA-Z0-9_$]/g, '');
+  return ContentService.createTextOutput(safeCallback + '(' + JSON.stringify(data) + ')')
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 /** Retorna somente alunos com situação Ativo da aba Alunos. */
