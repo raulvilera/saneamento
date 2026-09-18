@@ -1066,8 +1066,9 @@
       </p>
     </main>
     <script>
+      // Deployment do Apps Script fornecido: doGet(action=students) e doPost(JSON).
       const APPS_SCRIPT_URL =
-        "https://script.google.com/macros/s/AKfycbxp6lXEo2T8dgBBfJAW8bncToeJrmYUe2AklTSdYFlf8kOhWdBrz83pB1WaNP_Aphnf/exec";
+        "https://script.google.com/macros/s/AKfycbx2MHfSLqP7pQn1p9XMz39JJHc71trnTJ2b0fc2tJi4FusATp9vpgRasRGDMnAgvalF/exec";
       const FALLBACK_STUDENTS = [
         {
           turma: "9º Ano A",
@@ -1618,6 +1619,27 @@
           document.head.appendChild(script);
         });
       }
+      // O endpoint fornecido não implementa action=save em GET. O salvamento
+      // deve chamar doPost(e) com o JSON no corpo da requisição.
+      async function saveToAppsScript(payload, timeout = 20000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+        try {
+          const response = await fetch(APPS_SCRIPT_URL, {
+            method: "POST",
+            // Não definir Content-Type evita preflight CORS; doPost lê apenas
+            // e.postData.contents e o Apps Script aceita este corpo JSON.
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return await response.json();
+        } finally {
+          clearTimeout(timer);
+        }
+      }
       function loadStudents() {
         callAppsScript({ action: "students" })
           .then((data) => {
@@ -1707,10 +1729,7 @@
           data: $("data").value,
           answers,
         };
-        callAppsScript(
-          { action: "save", payload: JSON.stringify(payload) },
-          20000,
-        )
+        saveToAppsScript(payload, 20000)
           .then((result) => {
             if (!result.ok)
               throw new Error(result.error || "Falha ao registrar");
