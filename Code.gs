@@ -281,21 +281,34 @@ function formatResponseSheet_(sh) {
   );
 
   // Formatação condicional para respostas objetivas (Q1 a Q7: Colunas H a N)
+  // Regra 1: Acerto -> Azul (#9ccaf7) com texto azul-escuro (#073b73)
+  // Regra 2: Erro (qualquer outra célula preenchida) -> Vermelho (#f4aaaa) com texto vermelho-escuro (#8b1e1e)
+  // Utiliza métodos nativos do Google Sheets, 100% imunes a problemas de idioma ou fórmulas
   const rules = [];
+  const totalRows = Math.max(sh.getMaxRows(), 100);
+
   Object.keys(ANSWER_KEY).forEach((q, i) => {
-    const col = 8 + i; // Coluna H é a 8
-    const letter = columnLetter_(col);
-    const range = sh.getRange(2, col, bodyRows, 1);
+    const col = 8 + i; // Coluna H = 8 (Q1)
+    const range = sh.getRange(2, col, totalRows - 1, 1);
+    const correctAns = ANSWER_KEY[q];
 
-    // Acerto: azul claro
+    // Regra 1: Alternativa correta (AZUL)
     rules.push(SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied(`=UPPER(${letter}2)="${ANSWER_KEY[q]}"`)
-      .setBackground('#9ccaf7').setFontColor('#073b73').setRanges([range]).build());
+      .whenTextEqualTo(correctAns)
+      .setBackground('#9ccaf7')
+      .setFontColor('#073b73')
+      .setBold(true)
+      .setRanges([range])
+      .build());
 
-    // Erro: vermelho claro
+    // Regra 2: Célula preenchida (se não foi capturada pela regra 1, é erro -> VERMELHO)
     rules.push(SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied(`=AND(${letter}2<>"",UPPER(${letter}2)<>"${ANSWER_KEY[q]}")`)
-      .setBackground('#f4aaaa').setFontColor('#8b1e1e').setRanges([range]).build());
+      .whenCellNotEmpty()
+      .setBackground('#f4aaaa')
+      .setFontColor('#8b1e1e')
+      .setBold(true)
+      .setRanges([range])
+      .build());
   });
 
   sh.setConditionalFormatRules(rules);
