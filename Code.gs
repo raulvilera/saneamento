@@ -1,8 +1,8 @@
 /**
  * ATIVIDADE DE CIÊNCIAS – 9º ANO
  * - 7 questões objetivas com correção automática por gabarito (0 a 7 pontos).
- * - 3 questões dissertativas corrigidas por Agente de IA (Gemini) (0 a 1 ponto cada).
- * - Nota final calculada automaticamente de 0 a 10 pontos.
+ * - 3 questões dissertativas corrigidas por Agente de IA (Gemini 3.5 Flash Lite) (0 a 1 ponto cada).
+ * - Nota final calculada de 0 a 10 pontos (sem erros de fórmula).
  * - Formatação condicional nativa (Azul para acerto, Vermelho para erro).
  * - Respostas gravadas nas abas das respectivas turmas ("9º Ano A", "9º Ano B").
  */
@@ -155,39 +155,43 @@ function saveResponse(payload) {
       return userAns === ANSWER_KEY[q] ? sum + 1 : sum;
     }, 0);
 
-    // 2. Correção das questões dissertativas pelo Agente de IA (Gemini)
-    let aiGrades = {
-      q8: { nota: '', obs: '' },
-      q9: { nota: '', obs: '' },
-      q10: { nota: '', obs: '' },
-      status: 'Aguardando correção manual'
-    };
+    // 2. Tenta corrigir dissertativas com Agente de IA imediatamente
+    let notaQ8 = '';
+    let notaQ9 = '';
+    let notaQ10 = '';
+    let obsQ8 = '';
+    let obsQ9 = '';
+    let obsQ10 = '';
+    let statusCorrecao = 'Aguardando correção manual';
+    let notaFinal = objectiveScore; // Provisória até dissertativas
 
     try {
       const graded = gradeDissertativeWithAI_(answers.q8, answers.q9, answers.q10);
-      if (graded) {
-        aiGrades = {
-          q8: graded.q8,
-          q9: graded.q9,
-          q10: graded.q10,
-          status: 'Corrigido por IA'
-        };
+      if (graded && graded.q8 !== undefined) {
+        notaQ8 = graded.q8.nota;
+        notaQ9 = graded.q9.nota;
+        notaQ10 = graded.q10.nota;
+        obsQ8 = graded.q8.obs;
+        obsQ9 = graded.q9.obs;
+        obsQ10 = graded.q10.obs;
+        statusCorrecao = 'Corrigido por IA';
+        notaFinal = Math.round((objectiveScore + notaQ8 + notaQ9 + notaQ10) * 10) / 10;
       }
     } catch (e) {
-      Logger.log('Aviso: Falha temporária na IA durante envio. Ficará pendente para correção posterior: ' + e.message);
+      Logger.log('Aviso: IA em espera para autorização: ' + e.message);
     }
 
     const now = new Date();
     const dataFormatada = Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy');
 
     const row = [
-      now,                                     // Col A: Data/hora
-      dataFormatada,                           // Col B: Data
-      String(payload.nome || '').trim(),       // Col C: Nome
-      targetSheetName,                         // Col D: Turma
-      String(payload.ra || '').trim(),         // Col E: RA
-      String(payload.email || '').trim(),      // Col F: E-mail
-      String(payload.chamada || '').trim(),    // Col G: Nº chamada
+      now,                                           // Col A: Data/hora
+      dataFormatada,                                 // Col B: Data
+      String(payload.nome || '').trim(),             // Col C: Nome
+      targetSheetName,                               // Col D: Turma
+      String(payload.ra || '').trim(),               // Col E: RA
+      String(payload.email || '').trim(),            // Col F: E-mail
+      String(payload.chamada || '').trim(),          // Col G: Nº chamada
       String(answers.q1 || '').trim().toUpperCase(), // Col H: Q1
       String(answers.q2 || '').trim().toUpperCase(), // Col I: Q2
       String(answers.q3 || '').trim().toUpperCase(), // Col J: Q3
@@ -195,34 +199,29 @@ function saveResponse(payload) {
       String(answers.q5 || '').trim().toUpperCase(), // Col L: Q5
       String(answers.q6 || '').trim().toUpperCase(), // Col M: Q6
       String(answers.q7 || '').trim().toUpperCase(), // Col N: Q7
-      answers.q8 || '',                        // Col O: Q8 dissertativa
-      answers.q9 || '',                        // Col P: Q9 dissertativa
-      answers.q10 || '',                       // Col Q: Q10 dissertativa
-      objectiveScore,                          // Col R: Nota objetivas (0-7)
-      aiGrades.q8.nota,                        // Col S: Nota Q8 (0.0 a 1.0)
-      aiGrades.q9.nota,                        // Col T: Nota Q9 (0.0 a 1.0)
-      aiGrades.q10.nota,                       // Col U: Nota Q10 (0.0 a 1.0)
-      '',                                      // Col V: Nota final (calculada via fórmula)
-      aiGrades.status,                         // Col W: Status da correção
-      aiGrades.q8.obs,                         // Col X: Observação Q8
-      aiGrades.q9.obs,                         // Col Y: Observação Q9
-      aiGrades.q10.obs                         // Col Z: Observação Q10
+      answers.q8 || '',                              // Col O: Q8 dissertativa
+      answers.q9 || '',                              // Col P: Q9 dissertativa
+      answers.q10 || '',                             // Col Q: Q10 dissertativa
+      objectiveScore,                                // Col R: Nota objetivas (0-7)
+      notaQ8,                                        // Col S: Nota Q8 (IA)
+      notaQ9,                                        // Col T: Nota Q9 (IA)
+      notaQ10,                                       // Col U: Nota Q10 (IA)
+      notaFinal,                                     // Col V: Nota final (sem fórmulas com erro)
+      statusCorrecao,                                // Col W: Status da correção
+      obsQ8,                                         // Col X: Obs Q8
+      obsQ9,                                         // Col Y: Obs Q9
+      obsQ10                                         // Col Z: Obs Q10
     ];
 
     sh.appendRow(row);
     const lastRow = sh.getLastRow();
 
-    // Fórmula para nota final: Nota objetiva (R) + soma das notas dissertativas (S, T, U)
-    sh.getRange(lastRow, 22).setFormula(
-      `=IF(COUNT(S${lastRow}:U${lastRow})=3, R${lastRow}+SUM(S${lastRow}:U${lastRow}), "Aguardando dissertativas")`
-    );
-
     formatResponseSheet_(sh);
     sh.getRange(lastRow, 1, 1, row.length).setVerticalAlignment('top');
 
-    const msgStatus = aiGrades.status === 'Corrigido por IA'
-      ? 'Suas respostas objetivas e dissertativas foram corrigidas e pontuadas com sucesso!'
-      : 'Sua nota objetiva foi salva (' + objectiveScore + '/7); as dissertativas serão corrigidas em seguida.';
+    const msgStatus = statusCorrecao === 'Corrigido por IA'
+      ? `Suas respostas foram corrigidas com sucesso! Nota final: ${notaFinal}/10.`
+      : `Sua nota nas objetivas foi salva (${objectiveScore}/7); as dissertativas serão corrigidas pelo professor.`;
 
     return {
       ok: true,
@@ -242,33 +241,28 @@ function gradeDissertativeWithAI_(q8Text, q9Text, q10Text) {
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
 
-  const prompt = `Você é um professor especialista avaliador de Ciências do 9º ano do Ensino Fundamental.
-Avalie com rigor pedagógico e justiça as 3 respostas dissertativas a seguir.
+  const cleanQ8 = String(q8Text || '').replace(/[\r\n]+/g, ' ').replace(/"/g, "'");
+  const cleanQ9 = String(q9Text || '').replace(/[\r\n]+/g, ' ').replace(/"/g, "'");
+  const cleanQ10 = String(q10Text || '').replace(/[\r\n]+/g, ' ').replace(/"/g, "'");
 
-RUBRICA PEDAGÓGICA DE AVALIAÇÃO:
-1. Questão 8 – Pegada ecológica (Valor: 1,0 ponto):
-   - Enunciado: Família passou a consumir mais descartáveis, viajar frequentemente de avião e desperdiçar comida. Explicar como essas escolhas aumentam a pegada ecológica e indicar uma mudança de hábito para reduzi-la.
-   - Critérios: 0,5 ponto por explicar a relação com emissão de carbono/poluição/consumo excessivo de recursos e 0,5 ponto por indicar uma mudança de hábito plausível e efetiva. Se deixou em branco ou fugiu do tema = 0.0.
+  const prompt = `Você é um professor especialista avaliador de Ciências do 9º ano.
+Avalie pedagogicamente as 3 respostas dissertativas dos alunos com uma nota de 0.0 a 1.0 e um feedback curto (máximo 15 palavras) para cada uma.
 
-2. Questão 9 – Economia circular (Valor: 1,0 ponto):
-   - Enunciado: Celular com defeito teve a bateria trocada em vez de ser descartado, continuou em uso e as peças restantes foram encaminhadas para reaproveitamento. Explicar por que representa a economia circular.
-   - Critérios: 1,0 ponto por identificar a extensão do ciclo de vida, reparo/reutilização e diminuição de resíduos/lixo eletrônico. Se citou apenas conserto sem fundamentar = 0,5. Em branco = 0.0.
-
-3. Questão 10 – Resíduos e reciclagem (Valor: 1,0 ponto):
-   - Enunciado: Moradores separam papel, plástico, vidro e metal para coleta seletiva. Explicar como reduz impactos dos lixões e citar dois benefícios ambientais.
-   - Critérios: 0,5 ponto por explicar a redução do volume de resíduos nos lixões/contaminação e 0,5 ponto por citar dois benefícios ambientais corretos (ex: economia de recursos, menos poluição, economia de energia). Apenas um benefício = 0,25. Em branco = 0.0.
+CRITÉRIOS DE CORREÇÃO:
+- Questão 8 (Pegada ecológica - 1,0 ponto): Explicar como consumo de descartáveis, viagens de avião e desperdício de alimentos aumentam a pegada ecológica (0,5 pt) e indicar uma mudança de hábito para reduzi-la (0,5 pt).
+- Questão 9 (Economia circular - 1,0 ponto): Explicar por que trocar a bateria do celular e reaproveitar peças representa economia circular (extensão de vida útil, reparo/reutilização e redução de resíduos/lixo eletrônico) (1,0 pt). Se apenas citou conserto sem fundamentar = 0,5 pt.
+- Questão 10 (Resíduos e reciclagem - 1,0 ponto): Explicar como a coleta seletiva reduz impactos dos lixões (0,5 pt) e citar dois benefícios ambientais reais (0,5 pt).
 
 RESPOSTAS DO ALUNO:
-- Resposta Q8: "${String(q8Text || '').replace(/"/g, "'")}"
-- Resposta Q9: "${String(q9Text || '').replace(/"/g, "'")}"
-- Resposta Q10: "${String(q10Text || '').replace(/"/g, "'")}"
+- Q8: "${cleanQ8}"
+- Q9: "${cleanQ9}"
+- Q10: "${cleanQ10}"
 
-INSTRUÇÕES DE SAÍDA:
-Retorne ESTRITAMENTE um objeto JSON válido, sem crases de markdown extras, no formato:
+Responda ESTRITAMENTE em formato JSON:
 {
-  "q8": { "nota": 1.0, "obs": "Feedback de até 15 palavras justificando a nota." },
-  "q9": { "nota": 1.0, "obs": "Feedback de até 15 palavras justificando a nota." },
-  "q10": { "nota": 1.0, "obs": "Feedback de até 15 palavras justificando a nota." }
+  "q8": { "nota": 1.0, "obs": "Feedback em até 15 palavras." },
+  "q9": { "nota": 1.0, "obs": "Feedback em até 15 palavras." },
+  "q10": { "nota": 1.0, "obs": "Feedback em até 15 palavras." }
 }`;
 
   const payload = {
@@ -314,8 +308,8 @@ Retorne ESTRITAMENTE um objeto JSON válido, sem crases de markdown extras, no f
   };
 }
 
-// ========== CORREÇÃO EM LOTE PELO MENU (CORRIGIR TODAS AS PENDENTES) ==========
-function gradeAllPendingWithAI() {
+// ========== FUNÇÃO PRINCIPAL: CORRIGIR TODAS AS PENDENTES COM IA ==========
+function CORRIGIR_DISSERTATIVAS_AGORA() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let totalCorrigidos = 0;
 
@@ -323,24 +317,30 @@ function gradeAllPendingWithAI() {
     const sh = ss.getSheetByName(sheetName);
     if (!sh || sh.getLastRow() < 2) return;
 
-    const data = sh.getRange(2, 1, sh.getLastRow() - 1, 26).getValues();
+    const lastRow = sh.getLastRow();
+    const data = sh.getRange(2, 1, lastRow - 1, 26).getValues();
 
     for (let i = 0; i < data.length; i++) {
       const rowIndex = i + 2;
       const status = String(data[i][22] || ''); // Coluna W: Status da correção
+      const notaQ8Atual = data[i][18];          // Coluna S
 
-      // Se a linha estiver aguardando correção ou sem nota nas dissertativas
-      if (status.toLowerCase().includes('aguardando') || !data[i][18]) {
+      // Se a linha ainda não tem nota nas dissertativas ou está aguardando
+      if (status.toLowerCase().includes('aguardando') || notaQ8Atual === '' || notaQ8Atual === null) {
         const q8 = data[i][14]; // Coluna O
         const q9 = data[i][15]; // Coluna P
         const q10 = data[i][16]; // Coluna Q
+        const notaObj = Number(data[i][17] || 0); // Coluna R
 
         try {
           const graded = gradeDissertativeWithAI_(q8, q9, q10);
           if (graded) {
+            const notaFinal = Math.round((notaObj + graded.q8.nota + graded.q9.nota + graded.q10.nota) * 10) / 10;
+
             sh.getRange(rowIndex, 19).setValue(graded.q8.nota);  // Col S: Nota Q8
             sh.getRange(rowIndex, 20).setValue(graded.q9.nota);  // Col T: Nota Q9
             sh.getRange(rowIndex, 21).setValue(graded.q10.nota); // Col U: Nota Q10
+            sh.getRange(rowIndex, 22).setValue(notaFinal);       // Col V: Nota final sem erro
             sh.getRange(rowIndex, 23).setValue('Corrigido por IA'); // Col W: Status
             sh.getRange(rowIndex, 24).setValue(graded.q8.obs);   // Col X: Obs Q8
             sh.getRange(rowIndex, 25).setValue(graded.q9.obs);   // Col Y: Obs Q9
@@ -354,13 +354,9 @@ function gradeAllPendingWithAI() {
     }
   });
 
-  SpreadsheetApp.getActiveSpreadsheet().toast(
-    `${totalCorrigidos} atividade(s) corrigida(s) pela IA com sucesso!`,
-    'Correção Concluída',
-    5
-  );
-
-  return `${totalCorrigidos} atividades corrigidas com sucesso pela IA!`;
+  const msg = `${totalCorrigidos} atividade(s) corrigida(s) com sucesso pela IA!`;
+  SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Correção Concluída', 5);
+  return msg;
 }
 
 // ========== CONFIGURAÇÃO DA ABA DA TURMA ==========
@@ -408,7 +404,7 @@ function formatResponseSheet_(sh) {
     SpreadsheetApp.newDataValidation().requireNumberBetween(0, 1).setAllowInvalid(false).build()
   );
 
-  // FORMATAÇÃO CONDICIONAL NATIVA (Q1 a Q7 - Colunas H a N)
+  // Formatação condicional: Azul para acerto, Vermelho para erro
   const rules = [];
 
   Object.keys(ANSWER_KEY).forEach((q, i) => {
@@ -416,7 +412,6 @@ function formatResponseSheet_(sh) {
     const range = sh.getRange(2, col, totalRows - 1, 1);
     const correctLetter = ANSWER_KEY[q];
 
-    // Regra 1: Acerto -> AZUL CLARO (#9ccaf7) com texto azul escuro
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
         .whenTextEqualTo(correctLetter)
@@ -427,7 +422,6 @@ function formatResponseSheet_(sh) {
         .build()
     );
 
-    // Regra 2: Erro -> Célula preenchida que não seja o acerto -> VERMELHO CLARO (#f4aaaa) com texto vermelho escuro
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
         .whenCellNotEmpty()
@@ -441,8 +435,8 @@ function formatResponseSheet_(sh) {
 
   sh.setConditionalFormatRules(rules);
   sh.autoResizeColumns(1, lastCol);
-  sh.setColumnWidths(15, 3, 260); // Dissertativas
-  sh.setColumnWidths(24, 3, 260); // Observações
+  sh.setColumnWidths(15, 3, 260);
+  sh.setColumnWidths(24, 3, 260);
 }
 
 // ========== FUNÇÕES AUXILIARES ==========
@@ -465,16 +459,6 @@ function normalizeText_(str) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-function columnLetter_(column) {
-  let output = '';
-  while (column > 0) {
-    const remainder = (column - 1) % 26;
-    output = String.fromCharCode(65 + remainder) + output;
-    column = Math.floor((column - 1) / 26);
-  }
-  return output;
-}
-
 // ========== ATUALIZAR CORES E CABEÇALHOS ==========
 function setupActivity() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -489,7 +473,7 @@ function setupActivity() {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Atividade 9º Ano')
-    .addItem('🤖 Corrigir dissertativas com IA', 'gradeAllPendingWithAI')
+    .addItem('🤖 Corrigir dissertativas com IA', 'CORRIGIR_DISSERTATIVAS_AGORA')
     .addItem('🎨 Atualizar cores (Azul / Vermelho)', 'setupActivity')
     .addToUi();
 }
