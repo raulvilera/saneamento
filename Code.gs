@@ -13,6 +13,12 @@ const CLASS_SHEETS = ['9º Ano A', '9º Ano B'];
 const ANSWER_KEY = { q1: 'B', q2: 'B', q3: 'A', q4: 'B', q5: 'B', q6: 'A', q7: 'A' };
 const GEMINI_API_KEY = 'AIzaSyDr_WRG1qscvcz6zZtN9ohCH-_YCtfUV4o';
 
+// ========== EXECUTE ESTA FUNÇÃO UMA VEZ PARA LIBERAR A PERMISSÃO DO GOOGLE ==========
+function AUTORIZAR_ACESSO_IA() {
+  const resp = UrlFetchApp.fetch('https://www.google.com');
+  Logger.log('Sucesso! Permissão de rede liberada. Código HTTP: ' + resp.getResponseCode());
+}
+
 // ========== REQUISIÇÕES GET ==========
 function doGet(e) {
   const params = (e && e.parameter) || {};
