@@ -13,7 +13,7 @@ Esta pasta contém uma atividade interativa para o **3º bimestre**, baseada nos
 
 O `index.html` está configurado para o deployment informado:
 
-`https://script.google.com/macros/s/AKfycbx2MHfSLqP7pQn1p9XMz39JJHc71trnTJ2b0fc2tJi4FusATp9vpgRasRGDMnAgvalF/exec`
+`https://script.google.com/macros/s/AKfycbx3R9FXt9bU9TWcjpp_YofB6Wi7jnU-ShF4U8ZiNbghgwLdf4yedt-lxP7h9XSTSu9K/exec`
 
 O frontend usa `GET?action=students&callback=...` para carregar os alunos e `POST` com o objeto JSON da atividade para registrar as respostas. Isso corresponde aos métodos `doGet(e)` e `doPost(e)` do código Apps Script anexado.
 
